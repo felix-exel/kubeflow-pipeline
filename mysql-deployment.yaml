@@ -1,0 +1,54 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  namespace: mlflow
+  name: mysql-mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-mlflow
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: mysql-mlflow
+    spec:
+      containers:
+      - image: mysql/mysql-server:5.7.28
+        imagePullPolicy: IfNotPresent
+        name: mysql-mlflow
+        resources:
+          limits:
+            memory: "350Mi"
+            cpu: "500m"
+        envFrom:
+          - secretRef:
+              name: mysql-secret
+        ports:
+        # Opening Port 3306 for REST API
+            - containerPort: 3306
+              name: restapi
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: mlflow
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql-mlflow
+  clusterIP: None

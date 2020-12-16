@@ -1,0 +1,64 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  namespace: mlflow
+  name: mlflow-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow-server
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: mlflow-server
+    spec:
+      containers:
+      - image: mlflow/server:latest
+        imagePullPolicy: IfNotPresent
+        name: mlflow-server
+        resources:
+          limits:
+            memory: "550Mi"
+            cpu: "500m"
+        args:
+          - --host=0.0.0.0
+          - --port=5001
+          - --backend-store-uri=mysql+pymysql://$(MYSQL_USER):$(MYSQL_PASSWORD)@mysql.mlflow.svc.cluster.local:3306/$(MYSQL_DATABASE)
+          - --default-artifact-root=s3://bucket-fex # put your bucket name in here
+        envFrom:
+          - secretRef:
+              name: mysql-secret
+          - secretRef:
+              name: aws-secret
+        ports:
+        # Opening Port 5001 for REST API
+        - name: http
+          containerPort: 5001
+          protocol: TCP
+
+---
+apiVersion: v1
+# service type
+kind: Service
+metadata:
+  namespace: mlflow
+  # Service name
+  labels:
+    run: mlflow-service
+  name: mlflow-service
+spec:
+  ports:
+    # port = Incoming Port, targetPort = Routed port
+    - port: 5001
+      targetPort: 5001
+      protocol: TCP
+      name: http
+  selector:
+    app: mlflow-server
+  clusterIP: None
